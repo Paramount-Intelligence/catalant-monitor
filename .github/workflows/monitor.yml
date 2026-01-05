@@ -1,0 +1,63 @@
+name: Catalant Project Monitor
+
+on:
+  schedule:
+    # Runs every 30 minutes
+    - cron: '*/30 * * * *'
+  # Allow manual trigger from Actions tab
+  workflow_dispatch:
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      
+      - name: Install Python dependencies
+        run: |
+          pip install -r requirements.txt
+          
+      - name: Install Chrome and ChromeDriver
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y google-chrome-stable
+          
+      - name: Download previous project data
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: project-data
+          
+      - name: Run monitor
+        env:
+          CATALANT_EMAIL: ${{ secrets.CATALANT_EMAIL }}
+          CATALANT_PASSWORD: ${{ secrets.CATALANT_PASSWORD }}
+          SMTP_SERVER: ${{ secrets.SMTP_SERVER }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SENDER_EMAIL: ${{ secrets.SENDER_EMAIL }}
+          SENDER_PASSWORD: ${{ secrets.SENDER_PASSWORD }}
+          RECIPIENT_EMAILS: ${{ secrets.RECIPIENT_EMAILS }}
+          HEADLESS: 'True'
+          CHECK_INTERVAL: '0'
+        run: |
+          timeout 8m python script_clean_single.py || true
+      
+      - name: Upload project data
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: project-data
+          path: |
+            seen_projects.json
+            catalant_cookies.json
+          retention-days: 90
+          overwrite: true

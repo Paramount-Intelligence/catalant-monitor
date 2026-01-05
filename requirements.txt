@@ -1,0 +1,10 @@
+# Selenium for web automation
+selenium>=4.15.0
+
+# Environment variable management
+python-dotenv>=1.0.0
+
+# Note: You also need ChromeDriver installed and in your PATH
+# Download from: https://chromedriver.chromium.org/
+# Or install via: pip install webdriver-manager
+# Then the script can auto-download the driver
