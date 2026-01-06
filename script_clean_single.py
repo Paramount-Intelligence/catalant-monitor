@@ -20,6 +20,8 @@ load_dotenv()
 # ============================
 # CONFIGURATION
 # ============================
+
+
 class Config:
     """Load configuration from environment variables"""
     CATALANT_EMAIL = os.getenv("CATALANT_EMAIL")
@@ -36,6 +38,8 @@ class Config:
 # ============================
 # SESSION MANAGEMENT
 # ============================
+
+
 def save_cookies(driver):
     """Save session cookies to file"""
     try:
@@ -44,6 +48,7 @@ def save_cookies(driver):
         return True
     except Exception:
         return False
+
 
 def load_cookies(driver):
     """Load cookies from file"""
@@ -62,24 +67,28 @@ def load_cookies(driver):
     except Exception:
         return False
 
+
 def perform_login(driver):
     """Perform login to Catalant"""
     try:
         driver.get("https://app.gocatalant.com/c/_/u/0/dashboard/")
         time.sleep(3)
-        
+
         WebDriverWait(driver, 20).until(
             EC.presence_of_element_located((By.NAME, "email"))
         )
-        
+
         driver.find_element(By.NAME, "email").send_keys(Config.CATALANT_EMAIL)
-        driver.find_element(By.NAME, "password").send_keys(Config.CATALANT_PASSWORD)
-        driver.find_element(By.XPATH, "//button[contains(text(), 'Login') or @type='submit']").click()
-        
+        driver.find_element(By.NAME, "password").send_keys(
+            Config.CATALANT_PASSWORD)
+        driver.find_element(
+            By.XPATH, "//button[contains(text(), 'Login') or @type='submit']").click()
+
         WebDriverWait(driver, 30).until(
-            EC.presence_of_element_located((By.CSS_SELECTOR, ".need-card-inline-name"))
+            EC.presence_of_element_located(
+                (By.CSS_SELECTOR, ".need-card-inline-name"))
         )
-        
+
         save_cookies(driver)
         print("✅ Login successful")
         return True
@@ -90,61 +99,71 @@ def perform_login(driver):
 # ============================
 # PROJECT EXTRACTION
 # ============================
+
+
 def extract_project_data(card):
     """Extract data from a project card - returns None if invalid"""
     try:
         # Required: Title
-        title_elem = card.find_element(By.CSS_SELECTOR, ".need-card-inline-name .line-clamp-2")
+        title_elem = card.find_element(
+            By.CSS_SELECTOR, ".need-card-inline-name .line-clamp-2")
         title = title_elem.text.strip()
         if not title:
             return None
-        
+
         # Required: Project ID
         try:
-            like_button = card.find_element(By.CSS_SELECTOR, "[data-ajax-post*='need/']")
-            match = re.search(r'/need/([^/]+)/', like_button.get_attribute("data-ajax-post"))
+            like_button = card.find_element(
+                By.CSS_SELECTOR, "[data-ajax-post*='need/']")
+            match = re.search(
+                r'/need/([^/]+)/', like_button.get_attribute("data-ajax-post"))
             if not match:
                 return None
             project_id = match.group(1)
         except:
             return None
-        
+
         # Optional fields with safe fallbacks
         categories = []
         try:
-            cat_text = card.find_element(By.CSS_SELECTOR, ".need-card-inline-pools .small.text-muted").text.strip()
+            cat_text = card.find_element(
+                By.CSS_SELECTOR, ".need-card-inline-pools .small.text-muted").text.strip()
             categories = [c.strip() for c in cat_text.split("|") if c.strip()]
         except:
             pass
-        
+
         description = ""
         try:
-            description = card.find_element(By.CSS_SELECTOR, ".need-card-inline-details .line-clamp-2").text.strip()
+            description = card.find_element(
+                By.CSS_SELECTOR, ".need-card-inline-details .line-clamp-2").text.strip()
         except:
             pass
-        
+
         location = ""
         try:
-            loc_text = card.find_element(By.CSS_SELECTOR, ".text-gray-25.font-weight-semibold").text
+            loc_text = card.find_element(
+                By.CSS_SELECTOR, ".text-gray-25.font-weight-semibold").text
             location = loc_text.replace("Remote", "").strip()
         except:
             pass
-        
+
         time_posted = "Unknown"
         try:
-            time_elems = card.find_elements(By.XPATH, ".//div[contains(@class, 'small') and contains(@class, 'text-gray-20') and contains(@class, 'mt-1')]//span[contains(text(), 'Posted')]")
+            time_elems = card.find_elements(
+                By.XPATH, ".//div[contains(@class, 'small') and contains(@class, 'text-gray-20') and contains(@class, 'mt-1')]//span[contains(text(), 'Posted')]")
             if time_elems:
-                time_posted = time_elems[0].text.replace("Posted", "").replace("ago", "").strip()
+                time_posted = time_elems[0].text.replace(
+                    "Posted", "").replace("ago", "").strip()
         except:
             pass
-        
+
         status = "Posted"
         try:
             card.find_element(By.CSS_SELECTOR, ".badge-success")
             status = "New Project"
         except:
             pass
-        
+
         return {
             "id": project_id,
             "title": title,
@@ -158,25 +177,28 @@ def extract_project_data(card):
     except:
         return None
 
+
 def scan_for_projects(driver):
     """Scan dashboard for project cards - returns only valid projects"""
     try:
         WebDriverWait(driver, 15).until(
-            EC.presence_of_element_located((By.CSS_SELECTOR, ".need-card-inline-name"))
+            EC.presence_of_element_located(
+                (By.CSS_SELECTOR, ".need-card-inline-name"))
         )
-        
+
         # Get all card blocks
         all_cards = driver.find_elements(By.CSS_SELECTOR, "div.card-block")
-        
+
         # Filter to only those with project content
-        project_cards = [c for c in all_cards if c.find_elements(By.CSS_SELECTOR, ".need-card-inline")]
-        
+        project_cards = [c for c in all_cards if c.find_elements(
+            By.CSS_SELECTOR, ".need-card-inline")]
+
         projects = []
         for card in project_cards:
             project = extract_project_data(card)
             if project and project.get('title') and project.get('id'):
                 projects.append(project)
-        
+
         print(f"✅ Extracted {len(projects)} valid projects")
         return projects
     except TimeoutException:
@@ -189,6 +211,8 @@ def scan_for_projects(driver):
 # ============================
 # PROJECT DATABASE
 # ============================
+
+
 def load_seen_projects():
     """Load previously seen projects"""
     if not os.path.exists(Config.PROJECTS_DB):
@@ -199,6 +223,7 @@ def load_seen_projects():
     except:
         return []
 
+
 def save_seen_projects(projects):
     """Save projects to database"""
     try:
@@ -206,6 +231,7 @@ def save_seen_projects(projects):
             json.dump(projects, f, indent=2)
     except Exception as e:
         print(f"⚠️ Failed to save projects: {e}")
+
 
 def filter_new_projects(all_projects, seen_projects):
     """Filter out previously seen projects"""
@@ -215,15 +241,18 @@ def filter_new_projects(all_projects, seen_projects):
 # ============================
 # EMAIL NOTIFICATIONS
 # ============================
+
+
 def create_email_html(project):
     """Create HTML email for a project"""
     categories_html = ""
     if project.get("categories"):
         cats = "<br>".join([f"• {cat}" for cat in project["categories"]])
         categories_html = f"<div style='margin: 10px 0;'><strong>📁 Categories:</strong><br>{cats}</div>"
-    
-    description = project.get("description", "No description available").replace("\n", "<br>")
-    
+
+    description = project.get(
+        "description", "No description available").replace("\n", "<br>")
+
     return f"""
     <!DOCTYPE html>
     <html>
@@ -276,6 +305,7 @@ def create_email_html(project):
     </html>
     """
 
+
 def send_notification(project):
     """Send email notification for a new project"""
     try:
@@ -283,14 +313,14 @@ def send_notification(project):
         msg["Subject"] = f"🔔 Catalant: {project.get('title', 'New Project')}"
         msg["From"] = Config.SENDER_EMAIL
         msg["To"] = ", ".join(Config.RECIPIENT_EMAILS)
-        
+
         msg.attach(MIMEText(create_email_html(project), "html"))
-        
+
         with smtplib.SMTP(Config.SMTP_SERVER, Config.SMTP_PORT) as server:
             server.starttls()
             server.login(Config.SENDER_EMAIL, Config.SENDER_PASSWORD)
             server.send_message(msg)
-        
+
         print(f"📧 Email sent: {project.get('title', 'Unknown')[:50]}...")
         return True
     except Exception as e:
@@ -300,6 +330,8 @@ def send_notification(project):
 # ============================
 # DRIVER INITIALIZATION
 # ============================
+
+
 def initialize_driver():
     """Initialize Chrome WebDriver"""
     options = Options()
@@ -310,13 +342,15 @@ def initialize_driver():
     options.add_argument("--disable-blink-features=AutomationControlled")
     options.add_experimental_option("excludeSwitches", ["enable-automation"])
     options.add_experimental_option('useAutomationExtension', False)
-    options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
-    
+    options.add_argument(
+        "user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+
     driver = webdriver.Chrome(options=options)
     driver.execute_cdp_cmd('Network.setUserAgentOverride', {
         "userAgent": 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
     })
     return driver
+
 
 def setup_session(driver):
     """Setup browser session with cookies or login"""
@@ -325,44 +359,47 @@ def setup_session(driver):
         time.sleep(5)
         try:
             WebDriverWait(driver, 10).until(
-                EC.presence_of_element_located((By.CSS_SELECTOR, ".need-card-inline-name"))
+                EC.presence_of_element_located(
+                    (By.CSS_SELECTOR, ".need-card-inline-name"))
             )
             print("✅ Logged in via cookies")
             return True
         except:
             pass
-    
+
     return perform_login(driver)
 
 # ============================
 # SINGLE CHECK - NO LOOP
 # ============================
+
+
 def main():
     """Single check - runs once and exits (for GitHub Actions)"""
     print("=" * 50)
     print("🚀 Catalant Project Monitor - Single Check")
     print("=" * 50)
-    
+
     driver = initialize_driver()
-    
+
     try:
         if not setup_session(driver):
             print("❌ Failed to establish session")
             return
-        
+
         seen_projects = load_seen_projects()
         print(f"📁 Loaded {len(seen_projects)} seen projects\n")
-        
+
         print(f"🔄 Checking at {datetime.now().strftime('%H:%M:%S')}")
-        
+
         all_projects = scan_for_projects(driver)
-        
+
         if not all_projects:
             print("⚠️ No projects found")
             return
-        
+
         new_projects = filter_new_projects(all_projects, seen_projects)
-        
+
         if new_projects:
             print(f"🎯 Found {len(new_projects)} NEW project(s)!")
             for project in new_projects:
@@ -372,15 +409,17 @@ def main():
             save_seen_projects(seen_projects)
         else:
             print("⏳ No new projects")
-        
-        print(f"📊 Stats: {len(all_projects)} total, {len(seen_projects)} tracked")
+
+        print(
+            f"📊 Stats: {len(all_projects)} total, {len(seen_projects)} tracked")
         print("✅ Check complete")
-            
+
     except Exception as e:
         print(f"\n❌ Error: {e}")
     finally:
         driver.quit()
         print("✅ Browser closed")
+
 
 if __name__ == "__main__":
     main()

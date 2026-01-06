@@ -4,9 +4,8 @@
 .env.local
 .env.*.local
 
-# Session files
+# Session files (cookies only - seen_projects.json is tracked)
 catalant_cookies.json
-seen_projects.json
 
 # Python
 __pycache__/

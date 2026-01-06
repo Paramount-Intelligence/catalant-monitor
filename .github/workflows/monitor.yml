@@ -31,12 +31,6 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y google-chrome-stable
           
-      - name: Download previous project data
-        uses: actions/download-artifact@v4
-        continue-on-error: true
-        with:
-          name: project-data
-          
       - name: Run monitor
         env:
           CATALANT_EMAIL: ${{ secrets.CATALANT_EMAIL }}
@@ -51,13 +45,10 @@ jobs:
         run: |
           timeout 8m python script_clean_single.py || true
       
-      - name: Upload project data
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: project-data
-          path: |
-            seen_projects.json
-            catalant_cookies.json
-          retention-days: 90
-          overwrite: true
+      - name: Commit and push changes
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add seen_projects.json
+          git diff --quiet && git diff --staged --quiet || git commit -m "Update seen projects [skip ci]"
+          git push
