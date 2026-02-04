@@ -684,5 +684,19 @@
     "time_posted": "an hour",
     "status": "New Project",
     "detected_at": "2026-02-04 17:35:35"
+  },
+  {
+    "id": "ywmjpj",
+    "title": "Data Program Manager",
+    "categories": [
+      "Data & Business Analytics",
+      "Big Data & Analytics",
+      "Big Data & Analytics Project Management"
+    ],
+    "description": "Problem Statement:\nThe organization is facing challenges in effectively executing its enterprise data strategy due to a lack of centralized orchestration across platforms, analytics, governance, and advanced analytics initiatives. The complexity of overlapping projects, misaligned roadmaps, and undetected risks have hindered the strategic realization and overall efficiency of the data program.\n\n\nSuccess for this project would be achieving a seamless integration of all data-related initiatives into a single, coherent program that accelerates delivery and maximizes value across the enterprise. This includes establishing a single source of truth for data strategy execution that effectively informs the leadership on the progress, risks, and necessary decisions needed. Further, ensuring all data roadmaps are aligned and non-overlapping, and risks are identified and mitigated early, will significantly increase the throughput of strategic initiatives, allowing data leadership to focus more on strategic priorities.\n\n\nThe project scope includes the orchestration of the enterprise data program, the alignment of team-level roadmaps with the organization's data strategy, and the proactive identification and management of risks, dependencies, and blind spots. Deliverables will include an integrated data program narrative, updated and aligned project roadmaps, a risk management framework with early warning indicators, comprehensive program documentation, and executive-ready presentations summarizing program insights and progress. Out of scope are technical implementations, individual team performance management, and changes to the existing data strategy.\n\n\nThe ideal expert for this project should be a seasoned professional with extensive experience in managing complex, multi-year data programs within large organizations. The consultant should have a proven track record of successfully navigating both successes and failures in similar initiatives and possess a deep understanding of data strategy, governance, and analytics landscapes. Strong executive communication skills, the ability to synthesize complex information into compelling leadership insights, and a focus on disciplined execution are crucial. Experience within relevant industry sectors would be advantageous.",
+    "location": "",
+    "time_posted": "29 minutes",
+    "status": "New Project",
+    "detected_at": "2026-02-04 21:25:37"
   }
 ]
