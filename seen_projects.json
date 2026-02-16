@@ -866,5 +866,19 @@
     "time_posted": "2 minutes",
     "status": "New Project",
     "detected_at": "2026-02-16 17:59:15"
+  },
+  {
+    "id": "xvmw28",
+    "title": "URGENT Interim Head of Data",
+    "categories": [
+      "Data & Business Analytics",
+      "Big Data & Analytics",
+      "General Big Data & Analytics Expertise"
+    ],
+    "description": "Description Reporting to the Chief Technology Officer, the Interim Head of Data is a senior technology leader accountable for establishing and executing the enterprise data strategy. This role oversees data engineering, analytics, data governance, and enterprise data platforms to ensure high-quality, trusted, and accessible data. The leader will drive the modernization of the data environment, unify reporting models, and build a high-performing data organization aligned with business priorities to enable operational excellence and clinical insights. A primary mission is to solve a critical bottleneck: while a . You will be responsible for the transition of all data assets into the Lakehouse while maintaining legacy assets, ensuring no disruption to clinical or operational insights.\n\n\nOverseeing scalable data platform architectures and modernizing workloads using platforms like Databricks.\nDefining multi-year data strategies aligned with business, clinical, and technology objectives.\nConsolidating enterprise reporting under a unified model with consistent definitions and governed metrics.\nEstablishing frameworks for data quality, lineage, security, and stewardship while ensuring regulatory compliance.\n\nDefine and implement the enterprise data strategy and serve as the executive owner for data platforms and data quality.\nOversee ingestion, transformation, and consumption layers, ensuring standardized \"gold-layer\" datasets are ready for analytics and data science.\nPartner with business leaders to deliver actionable insights tied to operational, clinical, and financial KPIs.\nLead the data governance framework, covering metadata strategy and evolving AI-related governance expectations.\nProvide the platform foundations and data quality standards required for scalable and trustworthy machine learning adoption.\nBuild and develop a high-performing team across data engineering, analytics, and architecture, fostering a culture of accountability.\n\n10+ years spanning data engineering, analytics, or data architecture, with proven leadership of multi-disciplinary teams.\nDeep expertise in modern cloud data ecosystems such as Databricks, Snowflake, Delta Lake, and modern orchestration tools.\nDemonstrated success in delivering enterprise-scale data transformations.\nStrong understanding of governance, security, and high-trust data principles.\nExceptional skills in working effectively with executive-level stakeholders.\n\nExecutive / Interim Leadership.\nFull Time, 3 months with opportunity for extension or permanent role.\nHigh-growth, rapid change, healthcare services company",
+    "location": "",
+    "time_posted": "50 minutes",
+    "status": "New Project",
+    "detected_at": "2026-02-16 18:50:52"
   }
 ]
