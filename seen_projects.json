@@ -852,5 +852,19 @@
     "time_posted": "2 hours",
     "status": "New Project",
     "detected_at": "2026-02-13 22:03:20"
+  },
+  {
+    "id": "x2w3nw",
+    "title": "Interim VP of Data Science & AI Strategy",
+    "categories": [
+      "Data & Business Analytics",
+      "Big Data & Analytics",
+      "Data Science & Analysis"
+    ],
+    "description": "Description\nReporting to the Chief Technology Officer, the Interim VP of Data Science is a senior technology leader responsible for defining and executing the enterprise AI and machine learning strategy. Serving as a backfill, this role acts as a bridge between business strategy and technical execution, transforming data into actionable insights to drive product direction and operational excellence for a multispecialty provider of in-home care. The Interim VP will lead a high-performing organization of data scientists and ML engineers, ensuring models are delivered ethically, reliably, and with measurable business impact. This is a high-stakes position requiring a leader who is both advisory but also hands-on to ensure project momentum.\n\n\n\nPrimarily in DataBricks and Foundry within Microsoft Azure, utilizing OpenAI and some Gemini for LLM implementations.\nDelivering advanced analytics and predictive modeling in HIPAA/HITRUST regulated environments.\nBuilding, mentoring, and scaling diverse technical teams while fostering a culture of curiosity and rigor.\nA \"hands-on\" leadership style with the ability to write/review code and guide model design in modern ML stacks.\nServing as a credible technical voice and advisor to operational leadership on data-driven decision-making.\n\nOwn the enterprise data science vision and roadmap; translate business priorities into high-impact AI/ML initiatives with clear ROI measurement.\nOversee the design, deployment, and lifecycle management of predictive/prescriptive models, ensuring they are production-grade ecosystem and supported by strong MLOps practices.\nEstablish validation and monitoring processes consistent with HIPAA and HITRUST requirements, ensuring model explainability and analytical rigor.\nPartner with Data Engineering and App Development to ensure data scalability and embed models directly into clinical workflows and products.\nProvide technical leadership by reviewing approaches and validating assumptions to unblock complex problems without micromanaging.\n\n10+ years in data science, analytics, or applied AI, with 3+ years in senior leadership roles.\nBachelor\u2019s degree in a quantitative field (Computer Science, Statistics, Mathematics, Engineering, or similar).\nExpertise in statistical modeling, machine learning, experimental design, and operationalizing models in production. Expert knowledge of , alongside experience with integrations.\nProven track record of delivering ML or advanced analytics solutions within the healthcare sector.\nStrong executive communication and stakeholder-management skills to align technical output with business outcomes.\n\nExecutive / Interim Leadership.\nFull Time 3 months with opportunity for extension or permanent role.\nHigh-growth, rapid change, healthcare services company",
+    "location": "$10,000",
+    "time_posted": "2 minutes",
+    "status": "New Project",
+    "detected_at": "2026-02-16 17:59:15"
   }
 ]
