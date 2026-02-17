@@ -894,5 +894,19 @@
     "time_posted": "6 minutes",
     "status": "New Project",
     "detected_at": "2026-02-16 20:02:50"
+  },
+  {
+    "id": "rbpqb8",
+    "title": "VP of Cloud Engineering and Operations",
+    "categories": [
+      "Digital Transformation & Technology",
+      "Digital Strategy & Transformation",
+      "Cloud Strategy"
+    ],
+    "description": "Description\nReporting to the Chief Technology Officer, the VP of Cloud Engineering and Operations is a senior technology leader accountable for the strategy, reliability, scalability, and cost-effectiveness of the company\u2019s cloud and infrastructure platforms. This role serves as the architect and operator of the foundations supporting a multispecialty provider of in-home care, ensuring that mission-critical clinical and business workflows are highly available and secure. The VP acts as a bridge between high-level business growth and technical execution, owning the evolution of cloud landing zones, core networking, and DevOps enablement in a high-growth, regulated environment.\n\n\nThe ideal candidate will thrive in a culture with a strong background in:\nDeep expertise in , including VNET design, peering, routing, and identity foundations.\nDriving automation-first cultures using CI/CD patterns to reduce manual operations and enable self-service.\nOperating large-scale platforms within frameworks, ensuring secure-by-design architecture.\nLeading cloud financial management, forecasting, and vendor strategy to balance performance with cost-optimization.\nTreating infrastructure as an internal product with defined roadmaps, SLAs, and stakeholder feedback loops.\n\nDefine and execute the enterprise cloud strategy; own the architecture for compute, storage, and networking aligned with clinical operations and data-intensive analytics.\nEstablish and maintain SLAs/SLOs; lead incident response for infrastructure outages and drive systemic improvements through post-incident reviews.\nLead cloud-native adoption and platform refactoring; standardize IaC for provisioning and lifecycle management to accelerate application and data teams.\nPartner with Cybersecurity and Compliance teams to enforce network segmentation, encryption standards, and auditability across all environments.\nCollaborate with Data, Product, and App Dev teams to design high-throughput data pipelines and resilient infrastructure foundations.\n\n10+ years in infrastructure, cloud, or platform engineering leadership, with a proven track record in high-growth environments.\nExpert-level knowledge of , enterprise networking, hybrid connectivity, and DevOps toolchains.\nExperience supporting (HIPAA/HITRUST experience preferred).\nStrong experience in , capacity planning, and managing strategic vendor relationships.\nAbility to build and mentor high-performing engineering teams while fostering a culture of technical rigor and curiosity.\n\nExecutive Leadership.\nHigh-growth, rapid change, healthcare services company.\nScaling infrastructure foundations to support complex, in-home clinical care models.\nFull Time, 3 months with opportunity for extension or permanent role.",
+    "location": "",
+    "time_posted": "3 minutes",
+    "status": "New Project",
+    "detected_at": "2026-02-17 21:40:59"
   }
 ]
