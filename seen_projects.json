@@ -964,5 +964,19 @@
     "time_posted": "an hour",
     "status": "New Project",
     "detected_at": "2026-02-19 16:27:50"
+  },
+  {
+    "id": "re9b66",
+    "title": "Sales Operations & Lead Management Optimization (PE-backed Wealth Management Firm)",
+    "categories": [
+      "Sales & Marketing",
+      "Sales",
+      "Sales Team Optimization"
+    ],
+    "description": "Project Overview\nThe client, a PE-backed wealth management firm ($30B AUM), has introduced a firm-supported inbound lead engine (~600 leads annually) to complement its traditional advisor-led model. We are seeking a Wealth Management Sales Operations Expert to serve as a \"team of one\" builder-operator, designing a nimble, right-sized framework to qualify, route, and track leads with high accountability. The goal is to ease the friction between digital lead generation and veteran advisor workflows without over-engineering the solution.\n\nThe Consultant will report to the and work alongside the to deliver:\nAudit the current use cases and journeys and document a standardized \"Inbound Lead-to-Client\" workflow.\nDevelop scoring logic and implement routing protocols to transition leads from Marketing and Business Development to Wealth Advisors based on industry best practices.\nCreate a concise \"Speed to Lead\" guide with clear SLAs and expectations, as well as a training strategy to ensure advisors effectively manage marketing-generated leads.\nImplement a tracking and management system to monitor lead status and ensure advisor accountability across the base.\nUtilize lead data to finalize an ROI model for the inbound program to drive internal stakeholder alignment.\n\n\nBusiness Development Process Map: Visual end-to-end workflow from capture to conversion for inbound lead use cases.\nRouting & Scoring Matrix: Documented criteria for qualification and advisor assignment.\nAdvisor Playbook: A lightweight guide focused on engagement and accountability.\n\n\nUnderstanding of the wealth management sector and sales operations/business development best practices.\nProven track record of building sales processes in PE-backed environments; avoids \"enterprise-heavy\" solutions\nComfortable acting as a \"team of one\" who can move from high-level strategy to hands-on implementation\nChange Management Expertise: Ability to drive adoption among senior investment advisors and collaborate effectively with internal stakeholders.",
+    "location": "",
+    "time_posted": "10 minutes",
+    "status": "New Project",
+    "detected_at": "2026-02-19 21:19:27"
   }
 ]
