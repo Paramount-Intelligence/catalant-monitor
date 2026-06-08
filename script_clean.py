@@ -36,7 +36,7 @@ class Config:
     SMTP_PORT = int(os.getenv("SMTP_PORT", 587))
     SENDER_EMAIL = os.getenv("SENDER_EMAIL")
     SENDER_PASSWORD = os.getenv("SENDER_PASSWORD")
-    RECIPIENT_EMAILS = [e.strip() for e in os.getenv("RECIPIENT_EMAILS", "ahmedghazi459@gmail.com,ahsanuddin3522@gmail.com,muhammad.abdullahds1@gmail.com").split(",") if e.strip()]
+    RECIPIENT_EMAILS = [e.strip() for e in os.getenv("RECIPIENT_EMAILS", "ahmedghazi459@gmail.com,ahsanuddin3522@gmail.com").split(",") if e.strip()]
     CHECK_INTERVAL = int(os.getenv("CHECK_INTERVAL", 60))
     MAX_AGE_MINUTES = int(os.getenv("MAX_AGE_MINUTES", 60))
     HEADLESS = os.getenv("HEADLESS", "False").lower() == "true"
