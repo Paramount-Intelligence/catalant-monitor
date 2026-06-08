@@ -1,0 +1,26 @@
+name: Deploy to Contabo
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy on Contabo VM
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.CONTABO_HOST }}
+          username: ${{ secrets.CONTABO_USER }}
+          key: ${{ secrets.CONTABO_SSH_KEY }}
+          script: |
+            cd /root/catalant-monitor
+            git pull origin main
+            source venv/bin/activate
+            pip install -r requirements.txt
+            playwright install --with-deps chromium
+            sudo systemctl restart catalant-monitor
+            sudo systemctl status catalant-monitor --no-pager
