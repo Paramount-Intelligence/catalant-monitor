@@ -12,4 +12,4 @@ jobs:
     steps:
       - name: Trigger Coolify Deployment
         run: |
-          curl -X GET "${{ secrets.COOLIFY_WEBHOOK_URL }}"
+          curl -L -f -sS "${{ secrets.COOLIFY_WEBHOOK_URL }}"
