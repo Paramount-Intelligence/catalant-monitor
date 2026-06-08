@@ -12,4 +12,6 @@ jobs:
     steps:
       - name: Trigger Coolify Deployment
         run: |
-          curl -L -f -sS "${{ secrets.COOLIFY_WEBHOOK_URL }}"
+          curl -L -f \
+            -H "Authorization: Bearer ${{ secrets.COOLIFY_TOKEN }}" \
+            "${{ secrets.COOLIFY_WEBHOOK_URL }}"
