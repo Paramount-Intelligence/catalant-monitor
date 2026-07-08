@@ -648,6 +648,14 @@ def send_notification(project):
 # ============================
 # DRIVER INITIALIZATION
 # ============================
+CHROMEDRIVER_LOG_PATH = "/tmp/chromedriver.log"
+CHROME_TEMP_PATTERNS = (
+    "/tmp/chrome-user-data*",
+    "/tmp/.com.google.Chrome*",
+    "/tmp/.org.chromium.Chromium*",
+)
+
+
 def _find_binary(env_var, candidates):
     """Return a resolved executable path from env var, candidate paths, or PATH."""
     import shutil
@@ -696,8 +704,72 @@ def _get_binary_version(binary_path):
         return f"unavailable ({exc})"
 
 
+def _cleanup_chrome_temp_dirs():
+    """Remove stale Chromium profile/socket folders left by crashed containers."""
+    import glob
+    import shutil
+
+    tmp_root = os.path.realpath("/tmp")
+    allowed_prefixes = ("chrome-user-data", ".com.google.Chrome", ".org.chromium.Chromium")
+
+    for pattern in CHROME_TEMP_PATTERNS:
+        for path in glob.glob(pattern):
+            target = os.path.realpath(path)
+            basename = os.path.basename(target)
+            if not target.startswith(tmp_root + os.sep) or not basename.startswith(allowed_prefixes):
+                print(f"  Skipping unexpected Chrome temp path: {path}")
+                continue
+            try:
+                if os.path.isdir(path) and not os.path.islink(path):
+                    shutil.rmtree(path, ignore_errors=True)
+                else:
+                    os.remove(path)
+            except FileNotFoundError:
+                pass
+            except Exception as exc:
+                print(f"  Could not remove Chrome temp path {path}: {exc}")
+
+
+def _reset_chromedriver_log():
+    """Create/truncate the ChromeDriver log before each startup attempt."""
+    try:
+        os.makedirs(os.path.dirname(CHROMEDRIVER_LOG_PATH), exist_ok=True)
+        with open(CHROMEDRIVER_LOG_PATH, "w", encoding="utf-8"):
+            pass
+    except Exception as exc:
+        print(f"  Could not prepare ChromeDriver log {CHROMEDRIVER_LOG_PATH}: {exc}")
+
+
+def _print_chromedriver_log():
+    """Print ChromeDriver diagnostics after startup failure."""
+    try:
+        with open(CHROMEDRIVER_LOG_PATH, "r", encoding="utf-8", errors="replace") as log_file:
+            content = log_file.read().strip()
+    except FileNotFoundError:
+        print(f"  ChromeDriver log not found: {CHROMEDRIVER_LOG_PATH}")
+        return
+    except Exception as exc:
+        print(f"  Could not read ChromeDriver log {CHROMEDRIVER_LOG_PATH}: {exc}")
+        return
+
+    if content:
+        print(f"  --- {CHROMEDRIVER_LOG_PATH} ---")
+        print(content)
+        print(f"  --- end {CHROMEDRIVER_LOG_PATH} ---")
+    else:
+        print(f"  ChromeDriver log is empty: {CHROMEDRIVER_LOG_PATH}")
+
+
 def initialize_driver():
     """Initialize Chrome WebDriver"""
+    import uuid
+
+    _cleanup_chrome_temp_dirs()
+    _reset_chromedriver_log()
+
+    user_data_dir = f"/tmp/chrome-user-data-{uuid.uuid4().hex}"
+    os.makedirs(user_data_dir, exist_ok=True)
+
     options = Options()
     chrome_args = [
         "--headless=new",
@@ -711,8 +783,16 @@ def initialize_driver():
         "--disable-default-apps",
         "--disable-setuid-sandbox",
         "--window-size=1920,1080",
-        "--remote-debugging-port=9222",
-        "--user-data-dir=/tmp/chrome-user-data",
+        "--remote-debugging-port=0",
+        f"--user-data-dir={user_data_dir}",
+        "--disable-crash-reporter",
+        "--disable-in-process-stack-traces",
+        "--disable-features=VizDisplayCompositor",
+        "--disable-background-timer-throttling",
+        "--disable-renderer-backgrounding",
+        "--disable-popup-blocking",
+        "--no-first-run",
+        "--no-default-browser-check",
         "--disable-blink-features=AutomationControlled",
         "user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
     ]
@@ -720,7 +800,6 @@ def initialize_driver():
         options.add_argument(arg)
     options.add_experimental_option("excludeSwitches", ["enable-automation"])
     options.add_experimental_option('useAutomationExtension', False)
-    os.makedirs("/tmp/chrome-user-data", exist_ok=True)
 
     chrome_bin = _find_binary("CHROME_BIN", [
         "/usr/bin/chromium",
@@ -747,19 +826,27 @@ def initialize_driver():
         "/usr/lib/chromium-browser/chromedriver",
         "chromedriver",
     ])
+    service_args = ["--verbose"]
     if chromedriver_path:
-        service = Service(chromedriver_path)
+        service = Service(chromedriver_path, service_args=service_args, log_output=CHROMEDRIVER_LOG_PATH)
     else:
         # Let Selenium's built-in SeleniumManager resolve the right chromedriver
-        service = Service()
+        service = Service(service_args=service_args, log_output=CHROMEDRIVER_LOG_PATH)
 
     print("  Selenium Chrome startup:")
     print(f"    selected Chrome binary path: {chrome_bin or 'Selenium default'}")
     print(f"    Chromium version: {_get_binary_version(chrome_bin)}")
     print(f"    selected Chromedriver path: {chromedriver_path or 'SeleniumManager auto'}")
     print(f"    Chromedriver version: {_get_binary_version(chromedriver_path)}")
+    print(f"    Chrome user data dir: {user_data_dir}")
+    print(f"    ChromeDriver log: {CHROMEDRIVER_LOG_PATH}")
 
-    driver = webdriver.Chrome(service=service, options=options)
+    try:
+        driver = webdriver.Chrome(service=service, options=options)
+    except Exception:
+        print("  ChromeDriver startup failed; dumping ChromeDriver log before raising.")
+        _print_chromedriver_log()
+        raise
     driver.execute_cdp_cmd('Network.setUserAgentOverride', {
         "userAgent": 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
     })
