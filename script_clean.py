@@ -649,65 +649,116 @@ def send_notification(project):
 # DRIVER INITIALIZATION
 # ============================
 def _find_binary(env_var, candidates):
-    """Return the first existing path from env var or candidate list."""
+    """Return a resolved executable path from env var, candidate paths, or PATH."""
     import shutil
-    val = os.getenv(env_var, "")
-    if val and os.path.exists(val):
-        return val
-    for path in candidates:
-        if os.path.exists(path):
-            return path
-    found = shutil.which(candidates[-1].split('/')[-1])
-    return found or ""
+
+    configured = os.getenv(env_var, "").strip()
+    search_items = []
+    if configured:
+        search_items.append(configured)
+    search_items.extend(candidates)
+
+    for item in search_items:
+        if not item:
+            continue
+        if os.path.exists(item):
+            return item
+        found = shutil.which(item)
+        if found:
+            return found
+        basename = os.path.basename(item)
+        if basename and basename != item:
+            found = shutil.which(basename)
+            if found:
+                return found
+
+    if configured:
+        print(f"  {env_var} was set but no executable was found: {configured}")
+    return ""
+
+
+def _get_binary_version(binary_path):
+    """Return a short version string for startup diagnostics."""
+    import subprocess
+
+    if not binary_path:
+        return "not selected"
+    try:
+        result = subprocess.run(
+            [binary_path, "--version"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        version = (result.stdout or result.stderr).strip()
+        return version or f"version command returned no output (exit {result.returncode})"
+    except Exception as exc:
+        return f"unavailable ({exc})"
 
 
 def initialize_driver():
     """Initialize Chrome WebDriver"""
     options = Options()
-    if Config.HEADLESS:
-        options.add_argument("--headless=new")
-    options.add_argument("--no-sandbox")
-    options.add_argument("--disable-dev-shm-usage")
-    options.add_argument("--disable-setuid-sandbox")
-    options.add_argument("--disable-gpu")
-    options.add_argument("--window-size=1920,1080")
-    options.add_argument("--disable-blink-features=AutomationControlled")
+    chrome_args = [
+        "--headless=new",
+        "--no-sandbox",
+        "--disable-dev-shm-usage",
+        "--disable-gpu",
+        "--disable-software-rasterizer",
+        "--disable-extensions",
+        "--disable-background-networking",
+        "--disable-sync",
+        "--disable-default-apps",
+        "--disable-setuid-sandbox",
+        "--window-size=1920,1080",
+        "--remote-debugging-port=9222",
+        "--user-data-dir=/tmp/chrome-user-data",
+        "--disable-blink-features=AutomationControlled",
+        "user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+    ]
+    for arg in chrome_args:
+        options.add_argument(arg)
     options.add_experimental_option("excludeSwitches", ["enable-automation"])
     options.add_experimental_option('useAutomationExtension', False)
-    options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+    os.makedirs("/tmp/chrome-user-data", exist_ok=True)
 
     chrome_bin = _find_binary("CHROME_BIN", [
         "/usr/bin/chromium",
         "/usr/bin/chromium-browser",
         "/usr/bin/google-chrome",
         "/usr/bin/google-chrome-stable",
+        "chromium",
+        "chromium-browser",
+        "google-chrome",
+        "google-chrome-stable",
+        "chrome",
     ])
     if chrome_bin:
         options.binary_location = chrome_bin
-        print(f"  Chrome binary: {chrome_bin}")
 
     from selenium.webdriver.chrome.service import Service
 
     # On Linux containers: use the apt-installed chromedriver (always version-matched)
     # On Windows (local dev): fall through to Service() — Selenium's SeleniumManager
     #   will auto-download the correct chromedriver for the installed Chrome.
-    system_path = _find_binary("CHROMEDRIVER_PATH", [
+    chromedriver_path = _find_binary("CHROMEDRIVER_PATH", [
         "/usr/bin/chromedriver",
         "/usr/lib/chromium/chromedriver",
         "/usr/lib/chromium-browser/chromedriver",
+        "chromedriver",
     ])
-    if system_path:
-        service = Service(system_path)
-        print(f"  Chromedriver (system): {system_path}")
+    if chromedriver_path:
+        service = Service(chromedriver_path)
     else:
         # Let Selenium's built-in SeleniumManager resolve the right chromedriver
         service = Service()
-        print("  Chromedriver: SeleniumManager (auto)")
 
-    options.add_argument("--headless=new")
-    options.add_argument("--no-sandbox")
-    options.add_argument("--disable-dev-shm-usage")
-    options.add_argument("--disable-gpu")
+    print("  Selenium Chrome startup:")
+    print(f"    selected Chrome binary path: {chrome_bin or 'Selenium default'}")
+    print(f"    Chromium version: {_get_binary_version(chrome_bin)}")
+    print(f"    selected Chromedriver path: {chromedriver_path or 'SeleniumManager auto'}")
+    print(f"    Chromedriver version: {_get_binary_version(chromedriver_path)}")
+
     driver = webdriver.Chrome(service=service, options=options)
     driver.execute_cdp_cmd('Network.setUserAgentOverride', {
         "userAgent": 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
