@@ -72,6 +72,7 @@ class Config:
     LOGIN_RETRY_INTERVAL = int(os.getenv("LOGIN_RETRY_INTERVAL", "300"))
     CHECK_INTERVAL = int(os.getenv("CHECK_INTERVAL", 60))
     MAX_AGE_MINUTES = int(os.getenv("MAX_AGE_MINUTES", 60))
+    REPOST_MIN_DAYS = int(os.getenv("REPOST_MIN_DAYS", "3"))
     HEADLESS = os.getenv("HEADLESS", "False").lower() == "true"
     COOKIES_FILE = os.getenv("COOKIES_FILE", "catalant_cookies.json")
     MONGO_URI    = os.getenv("MONGO_URI", "mongodb://localhost:27017/")
@@ -499,6 +500,7 @@ def print_startup_banner():
     print("Catalant Project Monitor")
     print(f"Account: {Config.CATALANT_EMAIL or '(not set)'}")
     print(f"Interval: {Config.CHECK_INTERVAL}s")
+    print(f"Repost alert gap: > {Config.REPOST_MIN_DAYS} days")
     print(f"Project recipients: {', '.join(Config.RECIPIENT_EMAILS) if Config.RECIPIENT_EMAILS else '(none)'}")
     if Config.ERROR_RECIPIENTS:
         print(f"Error recipients: {', '.join(Config.ERROR_RECIPIENTS)}")
@@ -803,8 +805,86 @@ def _first_platform_category(cat_text):
     """Take the top-level category from a path like 'A > B > C' or 'A | B'."""
     if not cat_text:
         return ""
-    parts = re.split(r"\s*[>|]\s*", cat_text.strip())
+    parts = re.split(r"\s*[>|›»→]\s*", cat_text.strip())
     return parts[0].strip() if parts and parts[0].strip() else ""
+
+
+def _extract_platform_category_from_text(text):
+    """Pull top-level category from breadcrumb text (A > B > C)."""
+    if not text:
+        return ""
+    text = (
+        text.replace("\u00a0", " ")
+        .replace("&gt;", ">")
+        .replace("&amp;", "&")
+        .strip()
+    )
+    # Normalize uncommon separators to >
+    text = re.sub(r"\s*[›»→]\s*", " > ", text)
+    if ">" in text or "|" in text:
+        return _first_platform_category(text)
+    # Single-segment category from a dedicated element (no separator)
+    if 3 <= len(text) <= 80 and "\n" not in text and ":" not in text:
+        # Avoid grabbing random UI labels
+        lowered = text.lower()
+        noise = ("posted", "login", "search", "budget", "location", "timeline", "start date")
+        if not any(n in lowered for n in noise):
+            return text.strip()
+    return ""
+
+
+def _extract_platform_category(driver, body_text=""):
+    """Best-effort platform category from detail/card DOM or body text."""
+    # 1) Known Catalant category CSS hooks
+    for sel in (
+        ".text-gray.text-size-14.line-height-170",
+        "[class*='line-height-170']",
+        ".need-card-inline-pools .small.text-muted",
+        ".need-card-inline-pools .text-muted",
+        "[class*='need-card'] [class*='pool']",
+    ):
+        try:
+            for el in driver.find_elements(By.CSS_SELECTOR, sel):
+                raw = (el.text or "").strip()
+                cat = _extract_platform_category_from_text(raw)
+                if not cat:
+                    continue
+                if ">" in raw or "|" in raw or "›" in raw or "»" in raw:
+                    return cat
+                # Accept single-segment only from the primary category class
+                if "line-height-170" in sel:
+                    return cat
+        except Exception:
+            pass
+
+    # 2) XPath: any visible node whose text contains a breadcrumb separator
+    try:
+        for el in driver.find_elements(
+            By.XPATH,
+            "//*[contains(normalize-space(.),'>') or contains(.,'›') or contains(.,'|')]"
+        ):
+            raw = (el.text or "").strip()
+            if not raw or len(raw) > 200:
+                continue
+            # Prefer short breadcrumb lines, not huge page chunks
+            if raw.count("\n") > 2:
+                continue
+            cat = _extract_platform_category_from_text(raw)
+            if cat and (">" in raw or "|" in raw or "›" in raw):
+                return cat
+    except Exception:
+        pass
+
+    # 3) Body-text fallback: first breadcrumb-looking line
+    if body_text:
+        for m in re.finditer(
+            r"(?m)^([^\n:]{3,80}?)\s*[>|›»]\s*[^\n]{2,120}$",
+            body_text,
+        ):
+            cat = _extract_platform_category_from_text(m.group(0))
+            if cat:
+                return cat
+    return ""
 
 
 def extract_project_data(card):
@@ -828,18 +908,10 @@ def extract_project_data(card):
         
         # Optional: Platform Category (first segment of category path)
         platform_category = ""
-        for sel in (
-            ".text-gray.text-size-14.line-height-170",
-            ".need-card-inline-pools .small.text-muted",
-            ".need-card-inline-pools .text-muted",
-        ):
-            try:
-                cat_text = card.find_element(By.CSS_SELECTOR, sel).text.strip()
-                platform_category = _first_platform_category(cat_text)
-                if platform_category:
-                    break
-            except Exception:
-                pass
+        try:
+            platform_category = _extract_platform_category(card)
+        except Exception:
+            pass
         
         description = ""
         try:
@@ -1024,12 +1096,57 @@ def _get_collection():
         )
         raise
 
-def init_db():
-    """Ensure a unique index on 'project_id' exists."""
+def _normalize_posted_date(time_str):
+    """Normalize a posted-date string to MM/DD/YYYY, or '' if no absolute date found."""
+    if not time_str:
+        return ""
+    s = str(time_str).strip()
+    m = re.search(r'(\d{1,2})/(\d{1,2})/(\d{4})', s)
+    if m:
+        return f"{int(m.group(1)):02d}/{int(m.group(2)):02d}/{m.group(3)}"
+    m = re.search(r'(\d{4})-(\d{2})-(\d{2})', s)
+    if m:
+        return f"{int(m.group(2)):02d}/{int(m.group(3)):02d}/{m.group(1)}"
+    return ""
+
+
+def _parse_posted_date(time_str):
+    """Return a calendar date for an absolute posted-date value, or None.
+    Relative strings like '2 hours' are intentionally not converted to dates.
+    """
+    normalized = _normalize_posted_date(time_str)
+    if not normalized:
+        return None
     try:
-        _get_collection().create_index("project_id", unique=True, name="idx_project_id_unique")
+        return datetime.strptime(normalized, "%m/%d/%Y").date()
+    except ValueError:
+        return None
+
+
+def make_dedupe_key(project_id, time_posted):
+    """Unique occurrence key; project_id itself remains non-unique."""
+    if not project_id:
+        return ""
+    date = _normalize_posted_date(time_posted)
+    return f"{project_id}|{date}" if date else str(project_id)
+
+
+def init_db():
+    """Ensure unique sparse index on dedupe_key; non-unique on project_id.
+    Drops legacy unique project_id index so re-posts can insert new rows.
+    """
+    coll = _get_collection()
+    try:
+        coll.drop_index("idx_project_id_unique")
+        print("  DB: dropped legacy unique index on project_id (re-posts now allowed)")
+    except Exception:
+        pass
+    try:
+        coll.create_index(
+            "dedupe_key", unique=True, sparse=True, name="idx_dedupe_key_unique"
+        )
+        coll.create_index("project_id", name="idx_project_id")
     except Exception as e:
-        # Duplicate index name is harmless; alert only unexpected failures
         msg = str(e).lower()
         if "already exists" in msg or "indexoptionsconflict" in msg or "equivalent index" in msg:
             return
@@ -1037,38 +1154,76 @@ def init_db():
         send_error_notification(
             "DATABASE:INDEX_CREATION_FAILED",
             e,
-            details="index=idx_project_id_unique",
+            details="indexes=idx_dedupe_key_unique,idx_project_id",
             traceback_text=traceback.format_exc(),
-            diagnostics={"database": "office_monitor", "collection": "projects", "operation": "create_index"},
+            diagnostics={
+                "database": "office_monitor",
+                "collection": "projects",
+                "operation": "create_index",
+            },
         )
+
 
 def db_is_cold_start():
     """True if the collection has no documents (first ever run)."""
     return _get_collection().find_one({}, {"_id": 1}) is None
 
-def get_seen_ids():
-    """Return set of all project IDs already in DB."""
+
+def get_project_history():
+    """Return (seen_keys, known_ids, latest_by_id) from MongoDB.
+    Raises on failure so the monitor never treats DB as empty by mistake.
+    """
     try:
-        docs = _get_collection().find({}, {"project_id": 1, "_id": 0})
-        return {d["project_id"] for d in docs if d.get("project_id")}
+        docs = _get_collection().find(
+            {}, {"project_id": 1, "time_posted": 1, "dedupe_key": 1, "_id": 0}
+        )
+        keys = set()
+        known_ids = set()
+        latest_by_id = {}
+        for d in docs:
+            project_id = d.get("project_id")
+            if not project_id:
+                continue
+            known_ids.add(project_id)
+
+            key = d.get("dedupe_key") or make_dedupe_key(
+                project_id, d.get("time_posted")
+            )
+            if key:
+                keys.add(key)
+
+            posted_date = _parse_posted_date(d.get("time_posted"))
+            current_latest = latest_by_id.get(project_id)
+            if posted_date and (current_latest is None or posted_date > current_latest):
+                latest_by_id[project_id] = posted_date
+        return keys, known_ids, latest_by_id
     except Exception as e:
-        print(f"⚠️ Project lookup failed: {redact_sensitive_text(e)}")
+        print(f"⚠️ DB project-history load failed: {redact_sensitive_text(e)}")
         send_error_notification(
             "DATABASE:PROJECT_LOOKUP_FAILED",
             e,
-            details="operation=get_seen_ids",
+            details="operation=get_project_history",
             traceback_text=traceback.format_exc(),
-            diagnostics={"database": "office_monitor", "collection": "projects", "operation": "lookup"},
+            diagnostics={
+                "database": "office_monitor",
+                "collection": "projects",
+                "operation": "lookup",
+            },
         )
-        return set()
+        raise
+
+
+def get_seen_ids():
+    """Compatibility helper returning occurrence keys already in DB."""
+    return get_project_history()[0]
+
 
 def insert_project(project, emailed=True):
-    """Upsert one project record. Silently skips most fields if ID already exists.
-    Always updates platform_category when a non-empty value is scraped.
-    """
+    """Upsert one project record keyed on dedupe_key (id + posted date)."""
     try:
         cat = (project.get("platform_category") or "").strip()
         doc = {
+            "dedupe_key":         make_dedupe_key(project.get("id"), project.get("time_posted")),
             "project_id":         project.get("id"),
             "title":              project.get("title"),
             "description":        project.get("description"),
@@ -1088,19 +1243,17 @@ def insert_project(project, emailed=True):
             "platform":           "catalant",
             "emailed":            bool(emailed),
         }
-        # Cannot put the same path in both $set and $setOnInsert
-        update = {"$setOnInsert": dict(doc)}
-        if cat:
-            update["$set"] = {"platform_category": cat}
-        else:
-            update["$setOnInsert"]["platform_category"] = ""
+        if not doc["dedupe_key"]:
+            print("⚠️ DB insert skipped — missing dedupe_key / project_id")
+            return
+        # Always $set platform_category so the field exists even when scrape misses.
+        update = {"$setOnInsert": dict(doc), "$set": {"platform_category": cat}}
         _get_collection().update_one(
-            {"project_id": doc["project_id"]},
+            {"dedupe_key": doc["dedupe_key"]},
             update,
             upsert=True,
         )
     except Exception as e:
-        # Duplicate key on concurrent insert is normal dedup — skip alert
         msg = str(e).lower()
         if "duplicate key" in msg or "e11000" in msg:
             return
@@ -1120,9 +1273,10 @@ def insert_project(project, emailed=True):
             },
         )
 
+
 def bulk_insert_projects(projects, emailed=False):
-    """Upsert many projects at once (used for cold-start seeding).
-    Also $set platform_category on existing docs when scraped.
+    """Upsert many projects keyed on dedupe_key (cold-start seeding).
+    Returns True on success, False on failure.
     """
     try:
         ops = []
@@ -1130,37 +1284,48 @@ def bulk_insert_projects(projects, emailed=False):
             if not p.get("id"):
                 continue
             cat = (p.get("platform_category") or "").strip()
+            key = make_dedupe_key(p.get("id"), p.get("time_posted"))
+            if not key:
+                continue
             doc = {
-                "project_id":  p.get("id"),
-                "title":       p.get("title"),
-                "description": p.get("description"),
-                "location":    p.get("location"),
-                "budget":      p.get("budget"),
-                "duration":    p.get("duration"),
-                "time_posted": p.get("time_posted"),
-                "status":      p.get("status"),
-                "url":         p.get("url"),
-                "detected_at": p.get("detected_at"),
-                "platform":    "catalant",
-                "emailed":     bool(emailed),
+                "dedupe_key":        key,
+                "project_id":        p.get("id"),
+                "title":             p.get("title"),
+                "description":       p.get("description"),
+                "location":          p.get("location"),
+                "budget":            p.get("budget"),
+                "duration":          p.get("duration"),
+                "platform_category": cat,
+                "time_posted":       p.get("time_posted"),
+                "status":            p.get("status"),
+                "url":               p.get("url"),
+                "detected_at":       p.get("detected_at"),
+                "platform":          "catalant",
+                "emailed":           bool(emailed),
             }
+            # For seed inserts, keep platform_category in $setOnInsert only to
+            # avoid path conflicts; also $set when we have a non-empty value.
             update = {"$setOnInsert": dict(doc)}
             if cat:
-                update["$set"] = {"platform_category": cat}
-            else:
-                update["$setOnInsert"]["platform_category"] = ""
-            ops.append(UpdateOne({"project_id": doc["project_id"]}, update, upsert=True))
+                # Cannot put same path in both ops — drop from setOnInsert when setting
+                insert_doc = dict(doc)
+                insert_doc.pop("platform_category", None)
+                update = {
+                    "$setOnInsert": insert_doc,
+                    "$set": {"platform_category": cat},
+                }
+            ops.append(UpdateOne({"dedupe_key": key}, update, upsert=True))
         if ops:
             result = _get_collection().bulk_write(ops, ordered=False)
-            modified = getattr(result, "modified_count", 0)
             print(
-                f"  DB: inserted {result.upserted_count} records, "
-                f"updated category on {modified} (emailed={'yes' if emailed else 'no'})"
+                f"  DB: inserted {result.upserted_count} records "
+                f"(emailed={'yes' if emailed else 'no'})"
             )
+        return True
     except Exception as e:
         msg = str(e).lower()
         if "duplicate key" in msg or "e11000" in msg:
-            return
+            return True
         print(f"⚠️ DB bulk insert failed: {redact_sensitive_text(e)}")
         send_error_notification(
             "DATABASE:BULK_INSERT_FAILED",
@@ -1174,6 +1339,8 @@ def bulk_insert_projects(projects, emailed=False):
                 "record_count": len(projects),
             },
         )
+        return False
+
 
 def parse_posted_minutes(time_str):
     """Convert a scraped 'time_posted' string into minutes. Returns None if unparseable."""
@@ -1189,13 +1356,55 @@ def parse_posted_minutes(time_str):
     return val * {"minute": 1, "hour": 60, "day": 1440, "week": 10080, "month": 43200}[unit]
 
 
-def filter_new_projects(all_projects, seen_ids):
-    """Filter out already-seen IDs."""
+def filter_new_projects(all_projects, seen_ids, known_ids=None, latest_by_id=None):
+    """Keep first-seen IDs and re-posts newer than REPOST_MIN_DAYS.
+
+    project_id is the conditional lookup key. dedupe_key is the unique occurrence key.
+    Relative posted strings for known IDs are skipped (no invented date gaps).
+    """
+    known_ids = known_ids if known_ids is not None else set()
+    latest_by_id = latest_by_id if latest_by_id is not None else {}
+    comparison_keys = set(seen_ids)
+    comparison_ids = set(known_ids)
+    comparison_latest = dict(latest_by_id)
     result = []
     for p in all_projects:
-        if not p.get("id") or p["id"] in seen_ids:
+        project_id = p.get("id")
+        if not project_id:
             continue
-        result.append(p)
+
+        posted_value = p.get("time_posted", "")
+        key = make_dedupe_key(project_id, posted_value)
+        if key in comparison_keys:
+            continue
+
+        current_date = _parse_posted_date(posted_value)
+        if project_id not in comparison_ids:
+            result.append(p)
+            comparison_keys.add(key)
+            comparison_ids.add(project_id)
+            if current_date:
+                comparison_latest[project_id] = current_date
+            continue
+
+        latest_date = comparison_latest.get(project_id)
+        if current_date is None or latest_date is None:
+            print(
+                f"  Skipping known project {project_id}: "
+                "posted date cannot be compared safely"
+            )
+            continue
+
+        gap_days = (current_date - latest_date).days
+        if gap_days > Config.REPOST_MIN_DAYS:
+            result.append(p)
+            comparison_keys.add(key)
+            comparison_latest[project_id] = current_date
+        else:
+            print(
+                f"  Skipping project {project_id}: repost gap is "
+                f"{gap_days} day(s), requires > {Config.REPOST_MIN_DAYS}"
+            )
     return result
 
 # ============================
@@ -1283,22 +1492,11 @@ def fetch_project_details(driver, url):
 
         # Platform Category: first segment of "A > B > C" breadcrumb on detail page
         if not details.get("platform_category"):
-            for sel in (
-                ".text-gray.text-size-14.line-height-170",
-                "[class*='line-height-170']",
-            ):
-                try:
-                    for el in driver.find_elements(By.CSS_SELECTOR, sel):
-                        cat_text = el.text.strip()
-                        if ">" in cat_text or "|" in cat_text:
-                            platform_category = _first_platform_category(cat_text)
-                            if platform_category:
-                                details["platform_category"] = platform_category
-                                break
-                    if details.get("platform_category"):
-                        break
-                except Exception:
-                    pass
+            details["platform_category"] = _extract_platform_category(driver, body_text)
+            if details.get("platform_category"):
+                print(f"      platform_category → {details['platform_category']}")
+            else:
+                print("      ⚠️ platform_category not found on detail page")
 
     except Exception as e:
         print(f"  ⚠️ Detail fetch failed: {redact_sensitive_text(e)}")
@@ -1688,9 +1886,9 @@ def main():
 
         _monitor_state = "running"
         try:
-            cold_start = db_is_cold_start()
+            cold_start_pending = db_is_cold_start()
             init_db()
-            seen_ids = get_seen_ids()
+            seen_ids, known_ids, latest_by_id = get_project_history()
         except Exception as db_err:
             send_error_notification(
                 "DATABASE:INITIALIZATION_FAILED",
@@ -1701,57 +1899,15 @@ def main():
             )
             raise
 
-        print(f"📁 DB loaded — {len(seen_ids)} projects on record\n")
-
-        # ── STARTUP RECONCILIATION ───────────────────────────────────────────
-        SEED_MAX_AGE_MINUTES = 720  # 12 hours
-        label = "First run" if cold_start else "Restart"
-        print(f"⚙️  {label} — reconciling current page silently (no emails sent)...")
-        try:
-            seed_projects = scan_for_projects(driver)
-            if seed_projects:
-                recent, old = [], []
-                for p in seed_projects:
-                    age = parse_posted_minutes(p.get("time_posted", ""))
-                    if age is None or age <= SEED_MAX_AGE_MINUTES:
-                        recent.append(p)
-                    else:
-                        old.append(p)
-                for i, p in enumerate(recent, 1):
-                    if p.get("platform_category"):
-                        continue
-                    url = p.get("url")
-                    if not url:
-                        continue
-                    print(f"  [{i}/{len(recent)}] Fetching platform category: {p.get('title', '')[:50]}...")
-                    details = fetch_project_details(driver, url)
-                    if details.get("platform_category"):
-                        p["platform_category"] = details["platform_category"]
-                        print(f"      → {p['platform_category']}")
-                bulk_insert_projects(recent, emailed=False)
-                seen_ids = get_seen_ids()
-                for p in old:
-                    if p.get("id"):
-                        seen_ids.add(p["id"])
-                print(f"✅ Reconciled — {len(recent)} recent (saved to DB), {len(old)} old (ignored). Only NEW posts will trigger emails.\n")
-            else:
-                print("⚠️  Could not reconcile on startup — will retry next cycle.\n")
-                if last_scan_issue and not last_scan_issue.get("alert_sent"):
-                    send_error_notification(
-                        "DATABASE:COLD_START_RECONCILIATION_FAILED",
-                        last_scan_issue.get("error") or RuntimeError("No seed projects"),
-                        details="startup reconciliation found no projects",
-                        diagnostics={**_safe_driver_info(driver), "operation": "cold_start"},
-                    )
-        except Exception as recon_err:
-            print(f"⚠️ Reconciliation failed: {redact_sensitive_text(recon_err)}")
-            send_error_notification(
-                "DATABASE:COLD_START_RECONCILIATION_FAILED",
-                recon_err,
-                traceback_text=traceback.format_exc(),
-                diagnostics={**_safe_driver_info(driver), "operation": "cold_start"},
+        print(
+            f"📁 DB loaded — {len(seen_ids)} occurrence(s) across "
+            f"{len(known_ids)} project ID(s)\n"
+        )
+        if cold_start_pending:
+            print(
+                "⚙️  First run detected — the first successful scan will be "
+                "seeded without sending project emails.\n"
             )
-        # ─────────────────────────────────────────────────────────────────────
 
         check_count = 0
         while True:
@@ -1774,7 +1930,27 @@ def main():
                     time.sleep(Config.CHECK_INTERVAL)
                     continue
 
-                new_projects = filter_new_projects(all_projects, seen_ids)
+                # Never alert on the first run. Keep seeding until Mongo confirms.
+                if cold_start_pending:
+                    print("⚙️  Seeding first successful scan (project emails suppressed)...")
+                    if bulk_insert_projects(all_projects, emailed=False):
+                        seen_ids, known_ids, latest_by_id = get_project_history()
+                        cold_start_pending = False
+                        print(
+                            f"✅ Seeded {len(all_projects)} existing project(s). "
+                            "Only qualifying future posts will trigger emails.\n"
+                        )
+                    else:
+                        print(
+                            "⚠️  Initial seed was not confirmed; project emails remain "
+                            "suppressed and seeding will retry next cycle.\n"
+                        )
+                    time.sleep(Config.CHECK_INTERVAL)
+                    continue
+
+                new_projects = filter_new_projects(
+                    all_projects, seen_ids, known_ids, latest_by_id
+                )
 
                 if new_projects:
                     print(f"🎯 Found {len(new_projects)} NEW project(s)!")
@@ -1785,11 +1961,22 @@ def main():
                         project.update(details)
                         emailed = send_notification(project)
                         insert_project(project, emailed=emailed)
-                        seen_ids.add(project['id'])
+                        key = make_dedupe_key(project["id"], project.get("time_posted", ""))
+                        seen_ids.add(key)
+                        known_ids.add(project["id"])
+                        posted_date = _parse_posted_date(project.get("time_posted"))
+                        current_latest = latest_by_id.get(project["id"])
+                        if posted_date and (
+                            current_latest is None or posted_date > current_latest
+                        ):
+                            latest_by_id[project["id"]] = posted_date
                 else:
                     print("⏳ No new projects")
 
-                print(f"📊 Stats: {len(all_projects)} visible, {len(seen_ids)} in DB")
+                print(
+                    f"📊 Stats: {len(all_projects)} visible, "
+                    f"{len(seen_ids)} occurrence(s) / {len(known_ids)} ID(s) in DB"
+                )
                 print(f"\n⏳ Next check in {Config.CHECK_INTERVAL} seconds...")
                 time.sleep(Config.CHECK_INTERVAL)
 
